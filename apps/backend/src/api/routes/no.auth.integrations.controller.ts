@@ -72,10 +72,6 @@ export class NoAuthIntegrationsController {
 
     const org = await this._organizationService.getOrgById(organization);
 
-    if (!integrationProvider.customFields) {
-      await ioRedis.del(`login:${body.state}`);
-    }
-
     const details = integrationProvider.externalUrl
       ? await ioRedis.get(`external:${body.state}`)
       : undefined;
@@ -152,6 +148,36 @@ export class NoAuthIntegrationsController {
 
         return res(auth);
       } catch (err) {
+        // OAuth providers sometimes put request/response credentials in error
+        // messages and bodies. Log only stable diagnostic metadata.
+        if (integration === 'x') {
+          const oauthError = err as {
+            name?: unknown;
+            status?: unknown;
+            code?: unknown;
+            response?: { status?: unknown; data?: { errors?: { code?: unknown }[] } };
+          };
+          console.error('X OAuth exchange failed', {
+            errorName:
+              typeof oauthError?.name === 'string'
+                ? oauthError.name
+                : 'UnknownError',
+            httpStatus:
+              typeof oauthError?.response?.status === 'number'
+                ? oauthError.response.status
+                : typeof oauthError?.status === 'number'
+                  ? oauthError.status
+                  : null,
+            providerCode:
+              typeof oauthError?.code === 'number'
+                ? oauthError.code
+                : typeof oauthError?.response?.data?.errors?.[0]?.code ===
+                    'number'
+                  ? oauthError.response.data.errors[0].code
+                  : null,
+          });
+        }
+
         if (err instanceof NotEnoughScopes) {
           return res({
             error: err.message,
@@ -178,6 +204,12 @@ export class NoAuthIntegrationsController {
 
     if (error) {
       throw new NotEnoughScopes(error);
+    }
+
+    // Delete the single-use OAuth verifier only after a successful exchange.
+    // This keeps the lifecycle diagnosable if a provider rejects the exchange.
+    if (!integrationProvider.customFields) {
+      await ioRedis.del(`login:${body.state}`);
     }
 
     if (!id) {
