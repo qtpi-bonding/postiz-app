@@ -155,6 +155,7 @@ export class NoAuthIntegrationsController {
             name?: unknown;
             status?: unknown;
             code?: unknown;
+            data?: { errors?: { code?: unknown }[] };
             response?: { status?: unknown; data?: { errors?: { code?: unknown }[] } };
           };
           console.error('X OAuth exchange failed', {
@@ -169,12 +170,14 @@ export class NoAuthIntegrationsController {
                   ? oauthError.status
                   : null,
             providerCode:
-              typeof oauthError?.code === 'number'
-                ? oauthError.code
+              typeof oauthError?.data?.errors?.[0]?.code === 'number'
+                ? oauthError.data.errors[0].code
                 : typeof oauthError?.response?.data?.errors?.[0]?.code ===
                     'number'
                   ? oauthError.response.data.errors[0].code
-                  : null,
+                  : typeof oauthError?.code === 'number'
+                    ? oauthError.code
+                    : null,
           });
         }
 
