@@ -412,39 +412,20 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       accessSecret: oauth_token_secret,
     });
 
-    let accessToken: string;
-    let accessSecret: string;
-    let client: TwitterApi;
-    try {
-      ({ accessToken, client, accessSecret } = await startingClient.login(code));
-    } catch (error) {
-      // Deliberately stage-only: OAuth errors can contain credentials.
-      console.error('X OAuth stage failed', { stage: 'access-token' });
-      throw error;
-    }
+    const { accessToken, client, accessSecret } = await startingClient.login(
+      code
+    );
 
-    let username: string;
-    let verified: boolean;
-    let profile_image_url: string | undefined;
-    let name: string;
-    let id: string;
-    try {
-      ({
-        data: { username, verified, profile_image_url, name, id },
-      } = await client.v2.me({
-        'user.fields': [
-          'username',
-          'verified',
-          'verified_type',
-          'profile_image_url',
-          'name',
-        ],
-      }));
-    } catch (error) {
-      // Deliberately stage-only: API errors can contain user context.
-      console.error('X OAuth stage failed', { stage: 'v2-profile' });
-      throw error;
-    }
+    // X's OAuth 1.0a flow documents this v1.1 endpoint for identifying the
+    // authorized account. It also avoids requiring access to the v2 profile
+    // endpoint, which can be unavailable on Free projects.
+    const {
+      id_str: id,
+      screen_name: username,
+      verified,
+      profile_image_url_https: profile_image_url,
+      name,
+    } = await client.v1.verifyCredentials();
 
     return {
       id: String(id),
