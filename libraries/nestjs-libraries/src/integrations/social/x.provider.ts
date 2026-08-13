@@ -412,21 +412,39 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       accessSecret: oauth_token_secret,
     });
 
-    const { accessToken, client, accessSecret } = await startingClient.login(
-      code
-    );
+    let accessToken: string;
+    let accessSecret: string;
+    let client: TwitterApi;
+    try {
+      ({ accessToken, client, accessSecret } = await startingClient.login(code));
+    } catch (error) {
+      // Deliberately stage-only: OAuth errors can contain credentials.
+      console.error('X OAuth stage failed', { stage: 'access-token' });
+      throw error;
+    }
 
-    const {
-      data: { username, verified, profile_image_url, name, id },
-    } = await client.v2.me({
-      'user.fields': [
-        'username',
-        'verified',
-        'verified_type',
-        'profile_image_url',
-        'name',
-      ],
-    });
+    let username: string;
+    let verified: boolean;
+    let profile_image_url: string | undefined;
+    let name: string;
+    let id: string;
+    try {
+      ({
+        data: { username, verified, profile_image_url, name, id },
+      } = await client.v2.me({
+        'user.fields': [
+          'username',
+          'verified',
+          'verified_type',
+          'profile_image_url',
+          'name',
+        ],
+      }));
+    } catch (error) {
+      // Deliberately stage-only: API errors can contain user context.
+      console.error('X OAuth stage failed', { stage: 'v2-profile' });
+      throw error;
+    }
 
     return {
       id: String(id),
