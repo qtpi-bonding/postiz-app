@@ -58,6 +58,19 @@ export class PublicAuthMiddleware implements NestMiddleware {
         req.org = { ...org, users: [{ users: { role: 'SUPERADMIN' } }] };
       }
     } catch (err) {
+      // Do not log an auth header, error message, or response body here: those
+      // can contain credentials. The error class/code is sufficient to
+      // diagnose a broken self-hosted API-key lookup.
+      const apiError = err as { name?: unknown; code?: unknown };
+      console.error('Public API key lookup failed', {
+        errorName:
+          typeof apiError?.name === 'string' ? apiError.name : 'UnknownError',
+        errorCode:
+          typeof apiError?.code === 'string' ||
+          typeof apiError?.code === 'number'
+            ? apiError.code
+            : null,
+      });
       throw new HttpForbiddenException();
     }
 
