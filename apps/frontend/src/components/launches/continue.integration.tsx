@@ -1,6 +1,6 @@
 'use client';
 
-import { FC, useCallback, useEffect, useMemo, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HttpStatusCode } from 'axios';
 import { useRouter } from 'next/navigation';
 import { Redirect } from '@gitroom/frontend/components/layout/redirect';
@@ -38,6 +38,7 @@ export const ContinueIntegration: FC<{
   const [twoStepState, setTwoStepState] = useState<TwoStepState | null>(null);
   const [successState, setSuccessState] = useState<SuccessState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const hasSubmittedCallback = useRef(false);
 
   // Helper to handle navigation - redirects if logged or returnURL exists, otherwise shows inline
   const navigateOrShow = useCallback(
@@ -95,6 +96,15 @@ export const ContinueIntegration: FC<{
   }, []);
 
   useEffect(() => {
+    // X OAuth 1.0 request tokens are single-use. A duplicate callback
+    // submission masks the first response as "Invalid state".
+    if (provider === 'x' && hasSubmittedCallback.current) {
+      return;
+    }
+    if (provider === 'x') {
+      hasSubmittedCallback.current = true;
+    }
+
     (async () => {
       const timezone = String(dayjs.tz().utcOffset());
 
