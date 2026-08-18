@@ -7,7 +7,7 @@ import {
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import dayjs from 'dayjs';
 import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { getPublicKey, Relay, finalizeEvent, SimplePool } from 'nostr-tools';
+import { getPublicKey, nip19, Relay, finalizeEvent, SimplePool } from 'nostr-tools';
 
 import WebSocket from 'ws';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
@@ -33,7 +33,7 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
   isBetweenSteps = false;
   scopes = [] as string[];
   editor = 'normal' as const;
-  toolTip = 'Make sure you private a HEX key of your Nostr private key, you can get it from websites like iris.to'
+  toolTip = 'Paste your Nostr private key as a 64-character hex key or nsec1... value.'
 
   maxLength() {
     return 100000;
@@ -72,13 +72,27 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
   }
 
   private secretKeyBytes(secret: unknown): Uint8Array {
-    if (typeof secret !== 'string' || !/^[0-9a-fA-F]{64}$/.test(secret)) {
-      throw new Error('Nostr private key must be a 64-character hexadecimal string');
+    if (typeof secret !== 'string') {
+      throw new Error('Nostr private key must be a 64-character hex key or nsec1... value');
     }
 
-    return Uint8Array.from(
-      secret.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-    );
+    const value = secret.trim();
+    if (/^[0-9a-fA-F]{64}$/.test(value)) {
+      return Uint8Array.from(value.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
+    }
+
+    if (value.startsWith('nsec1')) {
+      try {
+        const decoded = nip19.decode(value);
+        if (decoded.type === 'nsec' && decoded.data instanceof Uint8Array) {
+          return decoded.data;
+        }
+      } catch {
+        // Fall through to the safe, format-only error below.
+      }
+    }
+
+    throw new Error('Nostr private key must be a 64-character hex key or nsec1... value');
   }
 
   private async findRelayInformation(pubkey: string) {
