@@ -365,6 +365,11 @@ export abstract class SocialAbstract {
       const handle = this.handleErrors(safeStringify(err), 200);
       value = { err: true, value: 'Unknown Error', ...(handle || {}) };
       globalErr = err;
+      console.warn(
+        `[social:${this.identifier || 'unknown'}] provider operation failed` +
+          (handle?.type ? ` type=${handle.type}` : '') +
+          (handle?.value ? ` message=${String(handle.value).slice(0, 200)}` : '')
+      );
     }
 
     if (value && value?.err && value?.value) {

@@ -106,37 +106,34 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
     return {};
   }
 
-  private async publish(pubkey: string, event: any) {
-    let id = '';
-    for (const relay of list) {
-      try {
-        const relayInstance = await Relay.connect(relay);
-        const value = new Promise<any>((resolve) => {
-          relayInstance.subscribe([{ kinds: [1], authors: [pubkey] }], {
-            eoseTimeout: 6000,
-            onevent: (event) => {
-              resolve(event);
-            },
-            oneose: () => {
-              resolve({});
-            },
-            onclose: () => {
-              resolve({});
-            },
-          });
-        });
+  private async publish(_pubkey: string, event: any) {
+    const accepted: string[] = [];
+    const rejected: string[] = [];
 
-        await relayInstance.publish(event);
-        const all = await value;
-        relayInstance.close();
-        // relayInstance.close();
-        id = id || all?.id;
-      } catch (err) {
-        /**empty**/
+    for (const relayUrl of list) {
+      let relay: Relay | undefined;
+      try {
+        relay = await Relay.connect(relayUrl);
+        await relay.publish(event);
+        accepted.push(relayUrl);
+      } catch (error) {
+        const reason = String(error).replace(/\s+/g, ' ').slice(0, 160);
+        rejected.push(`${relayUrl}: ${reason}`);
+      } finally {
+        relay?.close();
       }
     }
 
-    return id;
+    console.info(
+      `[social:nostr] event ${event.id} accepted by ${accepted.length}/${list.length} relays` +
+        (rejected.length ? `; rejected: ${rejected.join(' | ')}` : '')
+    );
+
+    if (!accepted.length) {
+      throw new Error(`Nostr rejected event ${event.id} on every configured relay`);
+    }
+
+    return event.id;
   }
 
   async authenticate(params: {

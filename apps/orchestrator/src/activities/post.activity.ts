@@ -67,6 +67,20 @@ export class PostActivity {
     private _subscriptionService: SubscriptionService
   ) {}
 
+  private logProviderOutcome(
+    operation: string,
+    provider: string,
+    result: unknown
+  ) {
+    const values = Array.isArray(result) ? result : [result];
+    const statuses = values.map((value: any) =>
+      typeof value?.status === 'string' ? value.status : 'unknown'
+    );
+    console.info(
+      `[social:${provider}] ${operation} outcome count=${values.length} statuses=${statuses.join(',')}`
+    );
+  }
+
   @ActivityMethod()
   async getIntegrationById(orgId: string, id: string) {
     return this._integrationService.getIntegrationById(orgId, id);
@@ -183,7 +197,7 @@ export class PostActivity {
         posts
       );
 
-      return getIntegration.comment(
+      const result = await getIntegration.comment(
         integration.internalId,
         postId,
         lastPostId,
@@ -209,6 +223,8 @@ export class PostActivity {
         ),
         integration
       );
+      this.logProviderOutcome('comment', integration.providerIdentifier, result);
+      return result;
     });
   }
 
@@ -296,8 +312,10 @@ export class PostActivity {
             integration.internalId,
             integration.token,
             mappedPosts,
-            integration
-          );
+          integration
+        );
+
+    this.logProviderOutcome('post', integration.providerIdentifier, postNow);
 
     // The post is already published at this point: the streak is best-effort,
     // failing the activity here would retry it and publish again.
@@ -329,11 +347,13 @@ export class PostActivity {
       integration.providerIdentifier
     );
 
-    return getIntegration.checkPostStatus(
+    const result = await getIntegration.checkPostStatus(
       integration.token,
       pendingData,
       integration
     );
+    this.logProviderOutcome('check-status', integration.providerIdentifier, result);
+    return result;
   }
 
   @ActivityMethod()
@@ -342,9 +362,15 @@ export class PostActivity {
       integration.providerIdentifier
     );
 
-    return withHeartbeat(() =>
-      getIntegration.finalizePost(integration.token, pendingData, integration)
-    );
+    return withHeartbeat(async () => {
+      const result = await getIntegration.finalizePost(
+        integration.token,
+        pendingData,
+        integration
+      );
+      this.logProviderOutcome('finalize', integration.providerIdentifier, result);
+      return result;
+    });
   }
 
   @ActivityMethod()
